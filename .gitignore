@@ -1,4 +1,6 @@
 # Common local artifacts
+data.json
+data.json.tmp
 .DS_Store
 Thumbs.db
 node_modules/

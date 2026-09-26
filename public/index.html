@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>社区共享厨房 · 值班安排</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #fff; --line: #e3e0d8; --ink: #2c2a26; --muted: #8a857a;
+    --accent: #c2571b; --accent-soft: #fdeee2;
+    --ok: #2e7d4f; --ok-soft: #e6f3ec;
+    --warn: #b3261e; --warn-soft: #fdecea;
+    --busy: #8a6d1d; --busy-soft: #fbf3d9;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { background: var(--card); border-bottom: 1px solid var(--line); padding: 14px 20px;
+           display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  header h1 { font-size: 18px; margin: 0 auto 0 0; }
+  main { max-width: 1080px; margin: 0 auto; padding: 16px 20px 60px; }
+  label { font-size: 13px; color: var(--muted); }
+  input, select, button { font: inherit; padding: 7px 10px; border: 1px solid var(--line);
+                          border-radius: 8px; background: #fff; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.ghost { background: transparent; }
+  button.danger { color: var(--warn); border-color: var(--warn); background: #fff; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+           padding: 14px 16px; margin-bottom: 16px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .row > div { display: flex; flex-direction: column; gap: 4px; }
+
+  #summary { display: flex; flex-wrap: wrap; gap: 10px; }
+  .stat { border-radius: 10px; padding: 8px 14px; font-size: 14px; background: #f0eee8; }
+  .stat b { font-size: 18px; margin-right: 4px; }
+  .stat.warn { background: var(--warn-soft); color: var(--warn); }
+  .stat.ok { background: var(--ok-soft); color: var(--ok); }
+
+  #closedBanner { background: var(--warn-soft); color: var(--warn); border-radius: 10px;
+                  padding: 10px 14px; margin-bottom: 16px; display: none; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); }
+  th, td { border: 1px solid var(--line); padding: 8px; vertical-align: top; text-align: left; }
+  th { background: #faf9f5; font-size: 13px; white-space: nowrap; }
+  td.slot { background: #faf9f5; font-size: 13px; white-space: nowrap; width: 110px; }
+  td.slot .time { color: var(--muted); font-size: 12px; }
+
+  .cell-empty { color: var(--muted); font-size: 13px; }
+  .rec { border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; font-size: 13px; }
+  .rec:last-child { margin-bottom: 0; }
+  .rec .name { font-weight: 600; }
+  .rec .badge { display: inline-block; font-size: 11px; border-radius: 6px; padding: 1px 6px;
+                margin-left: 6px; }
+  .rec.booked { background: var(--accent-soft); }
+  .rec.booked .badge { background: var(--accent); color: #fff; }
+  .rec.pending_sub { background: var(--busy-soft); }
+  .rec.pending_sub .badge { background: var(--busy); color: #fff; }
+  .rec.in_use { background: var(--ok-soft); }
+  .rec.in_use .badge { background: var(--ok); color: #fff; }
+  .rec.done, .rec.cancelled { background: #f0eee8; color: var(--muted); }
+  .rec.cancelled .name { text-decoration: line-through; }
+  .rec .reason { font-size: 12px; color: var(--warn); margin-top: 2px; }
+  .rec .actions { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .rec .actions button { font-size: 12px; padding: 3px 8px; }
+  .rec .actions input { font-size: 12px; padding: 3px 6px; width: 90px; }
+
+  #toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+           background: #2c2a26; color: #fff; padding: 10px 18px; border-radius: 10px;
+           font-size: 14px; opacity: 0; transition: opacity .25s; pointer-events: none;
+           max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.err { background: var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🍳 社区共享厨房 · 值班安排</h1>
+  <div>
+    <label for="date">日期</label><br>
+    <input type="date" id="date">
+  </div>
+  <div>
+    <label for="closeReason">管理员</label><br>
+    <span class="row" style="align-items:center">
+      <input id="closeReason" placeholder="关闭原因（可选）" size="14">
+      <button id="closeDay" class="danger">关闭当天预约</button>
+      <button id="openDay" class="ghost" style="display:none">重新开放</button>
+    </span>
+  </div>
+</header>
+
+<main>
+  <div id="closedBanner"></div>
+
+  <div class="panel">
+    <div id="summary"></div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <div><label>登记人</label><input id="name" placeholder="姓名" size="10"></div>
+      <div><label>时段</label><select id="slot"></select></div>
+      <div><label>灶台</label><select id="stove"></select></div>
+      <div><button id="submit" class="primary">提交登记</button></div>
+    </div>
+  </div>
+
+  <div class="panel" style="padding:0; overflow-x:auto">
+    <table id="grid"></table>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { date: null, schedule: null };
+
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function toast(msg, isErr) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => (t.className = ''), 3500);
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  const data = await res.json();
+  if (data.schedule) render(data.schedule);
+  if (!res.ok) {
+    toast(data.error || '操作失败', true);
+    const err = new Error(data.error);
+    err.handled = true;
+    throw err;
+  }
+  return data;
+}
+
+async function load() {
+  const data = await api('/api/schedule?date=' + state.date);
+  render(data);
+}
+
+function render(s) {
+  state.schedule = s;
+
+  // 汇总
+  $('summary').innerHTML =
+    `<span class="stat"><b>${s.summary.people}</b>在册人数</span>` +
+    `<span class="stat ok"><b>${s.summary.inUse}</b>开火中</span>` +
+    `<span class="stat ${s.summary.needSub ? 'warn' : ''}"><b>${s.summary.needSub}</b>缺替班</span>` +
+    `<span class="stat"><b>${s.summary.cancelled}</b>已取消</span>`;
+
+  // 关闭状态
+  $('closedBanner').style.display = s.closed ? 'block' : 'none';
+  $('closedBanner').textContent = s.closed ? `⚠️ 当天预约已关闭：${s.closeReason}（未开始的登记已取消，开火中的记录保留）` : '';
+  $('closeDay').style.display = s.closed ? 'none' : '';
+  $('openDay').style.display = s.closed ? '' : 'none';
+  $('submit').disabled = s.closed;
+
+  // 时段/灶台下拉（只初始化一次选项）
+  if (!$('slot').options.length) {
+    $('slot').innerHTML = s.slots.map((x) => `<option value="${x.id}">${x.label} ${x.time}</option>`).join('');
+    $('stove').innerHTML = s.stoves.map((n) => `<option value="${n}">${n} 号灶台</option>`).join('');
+  }
+
+  // 网格
+  const byCell = {};
+  for (const b of s.bookings) {
+    const k = b.slot + '|' + b.stove;
+    (byCell[k] = byCell[k] || []).push(b);
+  }
+  let html = '<tr><th>时段</th>' + s.stoves.map((n) => `<th>${n} 号灶台</th>`).join('') + '</tr>';
+  for (const slot of s.slots) {
+    html += `<tr><td class="slot">${slot.label}<br><span class="time">${slot.time}</span></td>`;
+    for (const stove of s.stoves) {
+      const recs = byCell[slot.id + '|' + stove] || [];
+      const active = recs.find((r) => ['booked', 'pending_sub', 'in_use'].includes(r.status));
+      const past = recs.filter((r) => r !== active);
+      html += '<td>';
+      if (active) html += renderRec(active, s.closed);
+      else html += `<div class="cell-empty"><button class="ghost" data-slot="${slot.id}" data-stove="${stove}">＋ 空闲，点击登记</button></div>`;
+      for (const r of past) html += renderRec(r, s.closed);
+      html += '</td>';
+    }
+    html += '</tr>';
+  }
+  $('grid').innerHTML = html;
+}
+
+function renderRec(r, dayClosed) {
+  let inner = `<span class="name">${esc(r.name)}</span><span class="badge">${r.statusLabel}</span>`;
+  if (r.status === 'cancelled' && r.cancelReason) inner += `<div class="reason">取消原因：${esc(r.cancelReason)}</div>`;
+  if (r.status === 'pending_sub') {
+    inner += `<div class="actions">
+      <input placeholder="替班人" id="sub-${r.id}">
+      <button data-act="handover" data-id="${r.id}">交接</button>
+    </div>`;
+  } else if (r.status === 'booked' && !dayClosed) {
+    inner += `<div class="actions">
+      <button data-act="start" data-id="${r.id}">开火</button>
+      <button data-act="leave" data-id="${r.id}">临时有事</button>
+    </div>`;
+  } else if (r.status === 'in_use') {
+    inner += `<div class="actions"><button data-act="finish" data-id="${r.id}">结束</button></div>`;
+  }
+  return `<div class="rec ${r.status}">${inner}</div>`;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ---------- 事件 ----------
+
+$('date').addEventListener('change', () => { state.date = $('date').value; load(); });
+
+$('submit').addEventListener('click', async () => {
+  try {
+    await api('/api/bookings', {
+      method: 'POST',
+      body: JSON.stringify({ date: state.date, slot: $('slot').value, stove: Number($('stove').value), name: $('name').value }),
+    });
+    toast('登记成功');
+  } catch (e) { if (!e.handled) toast('网络错误', true); }
+});
+
+$('grid').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  // 空闲格子：预填表单
+  if (btn.dataset.slot) {
+    $('slot').value = btn.dataset.slot;
+    $('stove').value = btn.dataset.stove;
+    $('name').focus();
+    return;
+  }
+  const { act, id } = btn.dataset;
+  if (!act) return;
+  try {
+    if (act === 'handover') {
+      const sub = $('sub-' + id).value;
+      await api(`/api/bookings/${id}/handover`, { method: 'POST', body: JSON.stringify({ substitute: sub }) });
+      toast('已交接给替班人');
+    } else {
+      await api(`/api/bookings/${id}/${act}`, { method: 'POST', body: '{}' });
+      toast({ start: '已开火', finish: '已结束', leave: '已标记临时有事，等待替班' }[act] || '完成');
+    }
+  } catch (e2) { if (!e2.handled) toast('网络错误', true); }
+});
+
+$('closeDay').addEventListener('click', async () => {
+  if (!confirm('关闭当天预约？未开始的登记将全部取消，开火中的记录保留。')) return;
+  try {
+    const d = await api(`/api/days/${state.date}/close`.replace('/days/', '/days/'), {
+      method: 'POST',
+      body: JSON.stringify({ reason: $('closeReason').value }),
+    });
+    toast(`已关闭当天预约，取消 ${d.cancelled} 条未开始登记`);
+  } catch (e) { if (!e.handled) toast('网络错误', true); }
+});
+
+$('openDay').addEventListener('click', async () => {
+  try {
+    await api(`/api/days/${state.date}/open`, { method: 'POST', body: '{}' });
+    toast('已重新开放');
+  } catch (e) { if (!e.handled) toast('网络错误', true); }
+});
+
+// ---------- 启动 ----------
+
+state.date = today();
+$('date').value = state.date;
+load();
+setInterval(load, 10000); // 定时同步他人改动
+</script>
+</body>
+</html>
