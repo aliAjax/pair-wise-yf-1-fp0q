@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>社区共享厨房 · 值班安排</title>
+<style>
+  :root {
+    --bg: #f5f3ee;
+    --card: #ffffff;
+    --ink: #2c2a26;
+    --muted: #8a857c;
+    --line: #e6e1d8;
+    --accent: #c2571b;
+    --accent-soft: #fbe9dc;
+    --green: #2e7d4f;
+    --green-soft: #e2f2e8;
+    --red: #b3382c;
+    --red-soft: #fbe4e1;
+    --amber: #9a6a00;
+    --amber-soft: #fdf0d3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    padding: 18px 24px;
+  }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 20px 16px 60px;
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .card h2 {
+    margin: 0 0 12px;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input, select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 14px;
+    background: #fff;
+    color: var(--ink);
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    padding: 8px 14px;
+    background: var(--accent);
+    color: #fff;
+  }
+  button:hover { filter: brightness(1.08); }
+  button.ghost {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  button.small { padding: 4px 10px; font-size: 12px; }
+  button.danger { background: var(--red); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .full { width: 100%; margin-top: 14px; }
+  .notice {
+    display: none;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .notice.show { display: block; }
+  .notice.error { background: var(--red-soft); color: var(--red); }
+  .notice.ok { background: var(--green-soft); color: var(--green); }
+  .day-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .day-toolbar .date-nav { display: flex; gap: 6px; align-items: center; }
+  .day-toolbar input[type="date"] { width: auto; }
+  .closed-banner {
+    display: none;
+    background: var(--amber-soft);
+    color: var(--amber);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .closed-banner.show { display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; white-space: nowrap; }
+  tr.cancelled td { color: var(--muted); }
+  .tag {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .tag.booked { background: var(--accent-soft); color: var(--accent); }
+  .tag.cooking { background: var(--green-soft); color: var(--green); }
+  .tag.done { background: #eee; color: var(--muted); }
+  .tag.cancelled { background: var(--red-soft); color: var(--red); }
+  .tag.need-sub { background: var(--amber-soft); color: var(--amber); }
+  .reason { font-size: 12px; color: var(--red); }
+  .sub-info { font-size: 12px; color: var(--muted); }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 18px 0; text-align: center; }
+  .summary-num { font-weight: 600; }
+  .summary-num.missing { color: var(--red); }
+  .section-gap { margin-top: 16px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>社区共享厨房 · 值班安排</h1>
+  <p>选择日期和灶台登记使用；已开火的时段保留原记录；临时有事请先登记替班人再交接。</p>
+</header>
+<main>
+  <!-- 左栏：登记表单 -->
+  <section class="card">
+    <h2>登记使用</h2>
+    <form id="bookForm">
+      <label for="fDate">日期</label>
+      <input type="date" id="fDate" required>
+      <label for="fStove">灶台</label>
+      <select id="fStove"></select>
+      <label for="fSlot">时段</label>
+      <select id="fSlot"></select>
+      <label for="fName">居民姓名</label>
+      <input type="text" id="fName" placeholder="例如：3栋 王阿姨" required maxlength="20">
+      <button type="submit" class="full">提交登记</button>
+    </form>
+    <div id="formNotice" class="notice"></div>
+    <p class="hint">提交时若同一灶台同一时段已被占用，会提示并刷新为最新安排。</p>
+  </section>
+
+  <!-- 右栏：当日安排 + 汇总 -->
+  <div>
+    <section class="card">
+      <h2>当日安排</h2>
+      <div class="day-toolbar">
+        <div class="date-nav">
+          <button type="button" class="ghost small" id="prevDay">← 前一天</button>
+          <input type="date" id="viewDate">
+          <button type="button" class="ghost small" id="nextDay">后一天 →</button>
+        </div>
+        <button type="button" class="danger small" id="closeDayBtn">管理员：关闭当天预约</button>
+      </div>
+      <div id="closedBanner" class="closed-banner"></div>
+      <div id="scheduleWrap"></div>
+    </section>
+
+    <section class="card section-gap">
+      <h2>按日期汇总</h2>
+      <div id="summaryWrap"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* ---------- 常量与数据 ---------- */
+const STOVES = ["1号灶台", "2号灶台", "3号灶台", "4号灶台"];
+const SLOTS = [
+  { id: "morning",   label: "早市备餐 06:00–09:00" },
+  { id: "lunch",     label: "午餐     10:00–13:00" },
+  { id: "afternoon", label: "下午茶   14:00–16:00" },
+  { id: "dinner",    label: "晚餐     16:30–19:30" },
+  { id: "night",     label: "夜宵     20:00–22:00" }
+];
+const LS_KEY = "community-kitchen-bookings-v1";
+const CLOSE_REASON = "管理员关闭了当天预约，未开始的登记已取消";
+
+/** booking: {id, date, stove, slot, name, status, substitute, needsSub, cancelReason, createdAt}
+ *  status: booked(已登记) | cooking(已开火) | done(已完成) | cancelled(已取消)
+ */
+let bookings = load();
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; }
+  catch (e) { return []; }
+}
+function save() {
+  localStorage.setItem(LS_KEY, JSON.stringify(bookings));
+}
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0")
+       + "-" + String(d.getDate()).padStart(2, "0");
+}
+function shiftDate(dateStr, days) {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0")
+       + "-" + String(d.getDate()).padStart(2, "0");
+}
+function slotLabel(id) {
+  const s = SLOTS.find(s => s.id === id);
+  return s ? s.label : id;
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ---------- 业务规则 ---------- */
+// 同一灶台同一时段的“占用中”记录（已登记或已开火）
+function findOccupant(date, stove, slot) {
+  return bookings.find(b =>
+    b.date === date && b.stove === stove && b.slot === slot &&
+    (b.status === "booked" || b.status === "cooking"));
+}
+
+function submitBooking(date, stove, slot, name) {
+  const occupant = findOccupant(date, stove, slot);
+  if (occupant) {
+    return { ok: false, occupant };
+  }
+  bookings.push({
+    id: Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+    date, stove, slot, name,
+    status: "booked",
+    substitute: null,
+    needsSub: false,
+    cancelReason: null,
+    createdAt: new Date().toISOString()
+  });
+  save();
+  return { ok: true };
+}
+
+function closeDay(date) {
+  let cancelled = 0, kept = 0;
+  for (const b of bookings) {
+    if (b.date !== date) continue;
+    if (b.status === "booked") {          // 未开始 → 取消并记录原因
+      b.status = "cancelled";
+      b.cancelReason = CLOSE_REASON;
+      cancelled++;
+    } else if (b.status === "cooking") {  // 已开火 → 保留
+      kept++;
+    }
+  }
+  save();
+  return { cancelled, kept };
+}
+
+/* ---------- 页面渲染 ---------- */
+const $ = id => document.getElementById(id);
+const viewDateInput = $("viewDate");
+
+function statusTag(b) {
+  if (b.status === "cancelled") return '<span class="tag cancelled">已取消</span>';
+  if (b.status === "done")      return '<span class="tag done">已完成</span>';
+  if (b.status === "cooking")   return '<span class="tag cooking">开火中</span>';
+  if (b.needsSub)               return '<span class="tag need-sub">待替班</span>';
+  return '<span class="tag booked">已登记</span>';
+}
+
+function rowActions(b) {
+  const a = [];
+  if (b.status === "booked") {
+    a.push(`<button class="small" data-act="start" data-id="${b.id}">开火</button>`);
+    if (!b.needsSub) {
+      a.push(`<button class="small ghost" data-act="needSub" data-id="${b.id}">临时有事</button>`);
+      a.push(`<button class="small ghost" data-act="cancel" data-id="${b.id}">取消</button>`);
+    } else {
+      a.push(`<button class="small" data-act="handover" data-id="${b.id}">登记替班人</button>`);
+    }
+  } else if (b.status === "cooking") {
+    a.push(`<button class="small ghost" data-act="finish" data-id="${b.id}">结束使用</button>`);
+  }
+  return `<div class="actions">${a.join("")}</div>`;
+}
+
+function renderSchedule() {
+  const date = viewDateInput.value;
+  const list = bookings
+    .filter(b => b.date === date)
+    .sort((x, y) => x.stove.localeCompare(y.stove, "zh") ||
+                    SLOTS.findIndex(s => s.id === x.slot) - SLOTS.findIndex(s => s.id === y.slot));
+
+  // 当天是否已被管理员关闭（存在因关闭而取消的记录即视为已关闭）
+  const isClosed = list.some(b => b.cancelReason === CLOSE_REASON);
+  const banner = $("closedBanner");
+  banner.classList.toggle("show", isClosed);
+  if (isClosed) banner.textContent = "当天预约已被管理员关闭：未开始的登记已取消，开火中的记录继续保留。";
+
+  if (!list.length) {
+    $("scheduleWrap").innerHTML = '<div class="empty">这一天还没有任何登记。</div>';
+    return;
+  }
+  const rows = list.map(b => {
+    const sub = b.substitute
+      ? `<div class="sub-info">已交接替班人：${esc(b.substitute)}</div>`
+      : (b.needsSub ? '<div class="sub-info">等待登记替班人……</div>' : "");
+    const reason = b.cancelReason ? `<div class="reason">原因：${esc(b.cancelReason)}</div>` : "";
+    return `<tr class="${b.status === "cancelled" ? "cancelled" : ""}">
+      <td>${esc(b.stove)}</td>
+      <td>${esc(slotLabel(b.slot))}</td>
+      <td>${esc(b.name)}${sub}${reason}</td>
+      <td>${statusTag(b)}</td>
+      <td>${rowActions(b)}</td>
+    </tr>`;
+  }).join("");
+  $("scheduleWrap").innerHTML = `<table>
+    <thead><tr><th>灶台</th><th>时段</th><th>居民</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+function renderSummary() {
+  const byDate = {};
+  for (const b of bookings) {
+    const s = byDate[b.date] || (byDate[b.date] = { people: 0, missingSub: 0 });
+    if (b.status !== "cancelled") s.people++;
+    if (b.needsSub && !b.substitute && b.status !== "cancelled") s.missingSub++;
+  }
+  const dates = Object.keys(byDate).sort();
+  if (!dates.length) {
+    $("summaryWrap").innerHTML = '<div class="empty">暂无数据。</div>';
+    return;
+  }
+  const rows = dates.map(d => {
+    const s = byDate[d];
+    const missingCls = s.missingSub > 0 ? "summary-num missing" : "summary-num";
+    return `<tr>
+      <td>${d}</td>
+      <td><span class="summary-num">${s.people}</span> 人</td>
+      <td><span class="${missingCls}">${s.missingSub}</span> 条</td>
+    </tr>`;
+  }).join("");
+  $("summaryWrap").innerHTML = `<table>
+    <thead><tr><th>日期</th><th>使用人数</th><th>缺替班</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+function renderAll() {
+  renderSchedule();
+  renderSummary();
+}
+
+function showNotice(text, isError) {
+  const n = $("formNotice");
+  n.textContent = text;
+  n.className = "notice show " + (isError ? "error" : "ok");
+}
+
+/* ---------- 事件 ---------- */
+function init() {
+  // 下拉选项
+  $("fStove").innerHTML = STOVES.map(s => `<option>${s}</option>`).join("");
+  $("fSlot").innerHTML = SLOTS.map(s => `<option value="${s.id}">${s.label}</option>`).join("");
+  $("fDate").value = todayStr();
+  viewDateInput.value = todayStr();
+
+  $("bookForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const date = $("fDate").value;
+    const stove = $("fStove").value;
+    const slot = $("fSlot").value;
+    const name = $("fName").value.trim();
+    if (!date || !name) return;
+
+    const result = submitBooking(date, stove, slot, name);
+    // 无论成功与否，都跳到对应日期展示最新安排
+    viewDateInput.value = date;
+    renderAll();
+
+    if (result.ok) {
+      showNotice(`登记成功：${date} ${stove} ${slotLabel(slot)}，${name}。`, false);
+      $("fName").value = "";
+    } else {
+      const o = result.occupant;
+      showNotice(
+        `提交失败：${stove} 的「${slotLabel(slot)}」已被 ${o.name} 占用` +
+        (o.status === "cooking" ? "（开火中）" : "") +
+        "。右侧已刷新为当天最新安排，请另选灶台或时段。", true);
+    }
+  });
+
+  viewDateInput.addEventListener("change", renderSchedule);
+  $("prevDay").addEventListener("click", () => { viewDateInput.value = shiftDate(viewDateInput.value, -1); renderSchedule(); });
+  $("nextDay").addEventListener("click", () => { viewDateInput.value = shiftDate(viewDateInput.value, 1); renderSchedule(); });
+
+  $("closeDayBtn").addEventListener("click", () => {
+    const date = viewDateInput.value;
+    if (!confirm(`确定关闭 ${date} 的预约吗？\n未开始的登记将全部取消并标注原因，开火中的记录会保留。`)) return;
+    const { cancelled, kept } = closeDay(date);
+    renderAll();
+    alert(`已关闭 ${date}：取消 ${cancelled} 条未开始的登记，保留 ${kept} 条开火中的记录。`);
+  });
+
+  // 当日安排表格内的操作（事件委托）
+  $("scheduleWrap").addEventListener("click", e => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const b = bookings.find(x => x.id === btn.dataset.id);
+    if (!b) return;
+
+    switch (btn.dataset.act) {
+      case "start":
+        b.status = "cooking";
+        break;
+      case "finish":
+        b.status = "done";
+        break;
+      case "cancel":
+        // 已开火的记录不会出现此按钮；未开始的可自行取消
+        b.status = "cancelled";
+        b.cancelReason = "居民自行取消";
+        break;
+      case "needSub":
+        b.needsSub = true;
+        break;
+      case "handover": {
+        const sub = prompt(`为「${b.name}」登记替班人姓名：`);
+        if (sub && sub.trim()) {
+          b.substitute = sub.trim();
+          b.needsSub = false;   // 交接完成
+        }
+        break;
+      }
+    }
+    save();
+    renderAll();
+  });
+
+  renderAll();
+}
+
+init();
+</script>
+</body>
+</html>
